@@ -122,3 +122,11 @@ Structure the code clean and modularly:
 5. **Frontend Views & Integration:** Create clean, tablet-responsive HTML views connected via Vanilla JS Fetch API handlers. Ensure CSS print styles exist for POS receipts.
 
 **Instructions:** Begin immediately by setting up the directory scaffolding, `package.json`, database schema, and seed script.
+
+
+
+
+
+
+
+trying git stash
