@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard — Sales & Inventory</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body class="bg-slate-100 min-h-screen flex">
+
+  <!-- Sidebar -->
+  <aside class="w-60 bg-slate-800 min-h-screen flex-shrink-0 hidden md:block" id="sidebar"></aside>
+
+  <!-- Main -->
+  <div class="flex-1 flex flex-col min-h-screen">
+    <!-- Top bar -->
+    <header class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
+      <h1 class="text-lg font-semibold text-slate-800">Dashboard</h1>
+      <span class="text-sm text-slate-500" id="todayDate"></span>
+    </header>
+
+    <main class="flex-1 p-6 space-y-6">
+
+      <!-- Stat cards -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4" id="statCards">
+        <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-200 animate-pulse h-24"></div>
+        <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-200 animate-pulse h-24"></div>
+        <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-200 animate-pulse h-24"></div>
+        <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-200 animate-pulse h-24"></div>
+      </div>
+
+      <!-- Low stock alert + Today summary -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        <!-- Low stock -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="font-semibold text-slate-700">⚠️ Low Stock Alerts</h2>
+            <a href="/inventory" class="text-xs text-emerald-600 hover:underline">View all</a>
+          </div>
+          <div id="lowStockList" class="space-y-2 max-h-64 overflow-y-auto text-sm"></div>
+        </div>
+
+        <!-- Today's sales summary -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="font-semibold text-slate-700">📊 Today's Sales Summary</h2>
+            <a href="/reports" class="text-xs text-emerald-600 hover:underline">Full report</a>
+          </div>
+          <div id="salesSummaryList" class="space-y-2 max-h-64 overflow-y-auto text-sm"></div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/layout.js"></script>
+  <script>
+    document.getElementById('todayDate').textContent = new Date().toLocaleDateString(undefined, {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+
+    async function loadDashboard() {
+      await initLayout();
+
+      // Stat cards
+      try {
+        const [inventory, lowStock] = await Promise.all([
+          API.get('/api/inventory'),
+          currentUser.role !== 'CASHIER' ? API.get('/api/inventory/low-stock') : Promise.resolve([]),
+        ]);
+
+        const totalProducts = [...new Set(inventory.map(i => i.product_id))].length;
+        const totalBranches = [...new Set(inventory.map(i => i.branch_id))].length;
+        const totalUnits    = inventory.reduce((s, i) => s + i.quantity, 0);
+
+        document.getElementById('statCards').innerHTML = `
+          <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
+            <p class="text-xs text-slate-500 uppercase tracking-wide mb-1">Products</p>
+            <p class="text-3xl font-bold text-slate-800">${totalProducts}</p>
+          </div>
+          <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
+            <p class="text-xs text-slate-500 uppercase tracking-wide mb-1">Branches</p>
+            <p class="text-3xl font-bold text-slate-800">${totalBranches}</p>
+          </div>
+          <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
+            <p class="text-xs text-slate-500 uppercase tracking-wide mb-1">Total Units</p>
+            <p class="text-3xl font-bold text-slate-800">${totalUnits.toLocaleString()}</p>
+          </div>
+          <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
+            <p class="text-xs text-slate-500 uppercase tracking-wide mb-1">Low Stock Items</p>
+            <p class="text-3xl font-bold ${lowStock.length > 0 ? 'text-red-600' : 'text-emerald-600'}">${lowStock.length}</p>
+          </div>
+        `;
+
+        // Low stock list
+        const lsEl = document.getElementById('lowStockList');
+        if (currentUser.role === 'CASHIER') {
+          lsEl.innerHTML = '<p class="text-slate-400 text-xs">Not available for your role.</p>';
+        } else if (lowStock.length === 0) {
+          lsEl.innerHTML = '<p class="text-emerald-600 text-xs">✅ All items are above reorder level.</p>';
+        } else {
+          lsEl.innerHTML = lowStock.slice(0, 10).map(item => `
+            <div class="flex items-center justify-between py-1.5 border-b border-slate-100">
+              <div>
+                <p class="font-medium text-slate-700">${item.product_name}</p>
+                <p class="text-xs text-slate-400">${item.branch_name}</p>
+              </div>
+              <span class="text-xs font-semibold badge-pulse ${item.quantity === 0 ? 'text-red-600' : 'text-orange-500'}">
+                ${item.quantity} / ${item.reorder_level}
+              </span>
+            </div>
+          `).join('');
+        }
+
+      } catch (e) {
+        console.error(e);
+      }
+
+      // Today sales summary
+      try {
+        if (currentUser.role !== 'CASHIER') {
+          const summary = await API.get('/api/sales/daily-summary');
+          const el = document.getElementById('salesSummaryList');
+          if (summary.length === 0) {
+            el.innerHTML = '<p class="text-slate-400 text-xs">No sales recorded today.</p>';
+          } else {
+            el.innerHTML = summary.map(row => `
+              <div class="flex items-center justify-between py-1.5 border-b border-slate-100">
+                <div>
+                  <p class="font-medium text-slate-700">${row.cashier_name}</p>
+                  <p class="text-xs text-slate-400">${row.branch_name} · ${row.total_transactions} txns</p>
+                </div>
+                <span class="text-sm font-semibold text-emerald-700">${fmt(row.total_revenue)}</span>
+              </div>
+            `).join('');
+          }
+        } else {
+          document.getElementById('salesSummaryList').innerHTML = '<p class="text-slate-400 text-xs">Not available for your role.</p>';
+        }
+      } catch (e) { /* non-fatal */ }
+    }
+
+    loadDashboard();
+  </script>
+</body>
+</html>

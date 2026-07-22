@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reports — Sales & Inventory</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body class="bg-slate-100 min-h-screen flex">
+
+  <aside class="w-60 bg-slate-800 min-h-screen flex-shrink-0 hidden md:block" id="sidebar"></aside>
+
+  <div class="flex-1 flex flex-col min-h-screen">
+    <header class="bg-white border-b border-slate-200 px-6 py-4">
+      <h1 class="text-lg font-semibold text-slate-800">Sales Reports</h1>
+    </header>
+
+    <main class="flex-1 p-6 space-y-5">
+
+      <!-- Filters -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-wrap gap-3 items-end">
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Date</label>
+          <input id="dateFilter" type="date"
+            class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+        </div>
+        <div id="branchFilterWrap">
+          <label class="block text-xs font-medium text-slate-600 mb-1">Branch</label>
+          <select id="branchFilter"
+            class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            <option value="">All Branches</option>
+          </select>
+        </div>
+        <button id="runReport"
+          class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-lg text-sm font-semibold">
+          Run Report
+        </button>
+      </div>
+
+      <!-- Summary cards -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4" id="summaryCards"></div>
+
+      <!-- Detail table -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 table-wrap">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
+            <tr>
+              <th class="px-4 py-3 text-left">Branch</th>
+              <th class="px-4 py-3 text-left">Cashier</th>
+              <th class="px-4 py-3 text-right">Transactions</th>
+              <th class="px-4 py-3 text-right">Subtotal</th>
+              <th class="px-4 py-3 text-right">Discounts</th>
+              <th class="px-4 py-3 text-right">Revenue</th>
+            </tr>
+          </thead>
+          <tbody id="reportBody">
+            <tr><td colspan="6" class="px-4 py-6 text-center text-slate-400">Select a date and run the report.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+    </main>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/layout.js"></script>
+  <script>
+    async function init() {
+      await initLayout();
+
+      // Set default date to today
+      const today = new Date().toISOString().slice(0, 10);
+      document.getElementById('dateFilter').value = today;
+
+      // Populate branch filter (ADMIN only)
+      if (currentUser.role === 'ADMIN') {
+        const branches = await API.get('/api/users/branches');
+        const sel = document.getElementById('branchFilter');
+        branches.forEach(b => {
+          const opt = document.createElement('option');
+          opt.value = b.id;
+          opt.textContent = b.name;
+          sel.appendChild(opt);
+        });
+      } else {
+        document.getElementById('branchFilterWrap').classList.add('hidden');
+      }
+
+      document.getElementById('runReport').addEventListener('click', runReport);
+      runReport(); // auto-run for today
+    }
+
+    async function runReport() {
+      const date     = document.getElementById('dateFilter').value;
+      const branchId = document.getElementById('branchFilter')?.value;
+
+      let url = `/api/sales/daily-summary?date=${date}`;
+      if (branchId) url += `&branch_id=${branchId}`;
+
+      try {
+        const data = await API.get(url);
+        renderReport(data);
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    function renderReport(rows) {
+      // Summary cards
+      const totals = rows.reduce((acc, r) => ({
+        transactions: acc.transactions + r.total_transactions,
+        subtotal:     acc.subtotal     + r.total_subtotal,
+        discounts:    acc.discounts    + r.total_discounts,
+        revenue:      acc.revenue      + r.total_revenue,
+      }), { transactions: 0, subtotal: 0, discounts: 0, revenue: 0 });
+
+      document.getElementById('summaryCards').innerHTML = `
+        <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
+          <p class="text-xs text-slate-500 uppercase tracking-wide mb-1">Total Transactions</p>
+          <p class="text-3xl font-bold text-slate-800">${totals.transactions}</p>
+        </div>
+        <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
+          <p class="text-xs text-slate-500 uppercase tracking-wide mb-1">Gross Subtotal</p>
+          <p class="text-3xl font-bold text-slate-800">${fmt(totals.subtotal)}</p>
+        </div>
+        <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
+          <p class="text-xs text-slate-500 uppercase tracking-wide mb-1">Total Discounts</p>
+          <p class="text-3xl font-bold text-orange-600">${fmt(totals.discounts)}</p>
+        </div>
+        <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
+          <p class="text-xs text-slate-500 uppercase tracking-wide mb-1">Net Revenue</p>
+          <p class="text-3xl font-bold text-emerald-700">${fmt(totals.revenue)}</p>
+        </div>
+      `;
+
+      const body = document.getElementById('reportBody');
+      if (rows.length === 0) {
+        body.innerHTML = '<tr><td colspan="6" class="px-4 py-6 text-center text-slate-400">No sales data for this date.</td></tr>';
+        return;
+      }
+
+      body.innerHTML = rows.map(r => `
+        <tr class="hover:bg-slate-50 border-t border-slate-100">
+          <td class="px-4 py-3 font-medium text-slate-700">${r.branch_name}</td>
+          <td class="px-4 py-3 text-slate-600">${r.cashier_name}</td>
+          <td class="px-4 py-3 text-right text-slate-700">${r.total_transactions}</td>
+          <td class="px-4 py-3 text-right text-slate-700">${fmt(r.total_subtotal)}</td>
+          <td class="px-4 py-3 text-right text-orange-600">${fmt(r.total_discounts)}</td>
+          <td class="px-4 py-3 text-right font-semibold text-emerald-700">${fmt(r.total_revenue)}</td>
+        </tr>
+      `).join('');
+    }
+
+    init();
+  </script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+{
+  "name": "sales-inventory-system",
+  "version": "1.0.0",
+  "description": "Multi-Branch Sales & Inventory Management System",
+  "main": "app.js",
+  "scripts": {
+    "start": "node --experimental-sqlite app.js",
+    "dev": "nodemon --exec \"node --experimental-sqlite\" app.js",
+    "db:init": "node scripts/initDb.js",
+    "db:seed": "node scripts/seed.js",
+    "setup": "npm install && node scripts/initDb.js && node scripts/seed.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "connect-sqlite3": "^0.9.15",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.3.1",
+    "express-session": "^1.18.0",
+    "express-validator": "^7.1.0",
+    "helmet": "^7.1.0",
+    "session-file-store": "^1.5.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  }
+}

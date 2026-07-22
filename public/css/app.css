@@ -1,0 +1,41 @@
+/* Custom styles layered on top of Tailwind */
+
+/* Sidebar active link */
+.nav-link.active {
+  background-color: rgba(255,255,255,0.15);
+  font-weight: 600;
+}
+
+/* POS cart item hover */
+.cart-row:hover { background-color: #f0fdf4; }
+
+/* Receipt print styles */
+@media print {
+  body * { visibility: hidden; }
+  #receipt-printable,
+  #receipt-printable * { visibility: visible; }
+  #receipt-printable {
+    position: absolute;
+    top: 0; left: 0;
+    width: 80mm;
+    font-size: 11px;
+    font-family: monospace;
+  }
+  .no-print { display: none !important; }
+}
+
+/* Toast notification */
+#toast {
+  transition: opacity 0.4s ease;
+}
+#toast.hidden { opacity: 0; pointer-events: none; }
+
+/* Low-stock badge pulse */
+@keyframes pulse-badge {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.badge-pulse { animation: pulse-badge 1.5s infinite; }
+
+/* Table responsive wrapper */
+.table-wrap { overflow-x: auto; }
